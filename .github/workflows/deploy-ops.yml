@@ -1,0 +1,51 @@
+name: Deploy Config → ops.wiwo.me
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'compose.yml'
+      - 'compose.testops.yml'
+      - 'setup.sh'
+      - 'nginx.sh'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-ops-config
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY_OPS }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SSH_HOST_OPS }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Sync config files
+        run: |
+          rsync -avz \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            --include='compose.yml' \
+            --include='compose.testops.yml' \
+            --include='setup.sh' \
+            --include='nginx.sh' \
+            --exclude='*' \
+            ./ ${{ secrets.SSH_USER_OPS }}@${{ secrets.SSH_HOST_OPS }}:/root/huly-selfhost/
+
+      - name: Redeploy containers
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${{ secrets.SSH_USER_OPS }}@${{ secrets.SSH_HOST_OPS }} << 'DEPLOY'
+              set -e
+              cd /root/huly-selfhost
+              bash nginx.sh
+              docker compose -f compose.yml -f compose.testops.yml up -d
+              echo "✅ Config deployed and containers restarted"
+          DEPLOY
