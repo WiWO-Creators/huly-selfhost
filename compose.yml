@@ -189,9 +189,10 @@ services:
       - GOOGLE_CLIENT_ID
       - GOOGLE_CLIENT_SECRET
       - GOOGLE_DISPLAY_NAME=${GOOGLE_DISPLAY_NAME:-Google}
-      # Sin "=" a proposito: una variable no definida no debe llegar como
-      # cadena vacia, que el codigo interpretaria como "sin restriccion".
-      - ALLOWED_EMAIL_DOMAINS
+      # Dominios autorizados a entrar por Google. No es un secreto, asi que vive
+      # aqui (versionado y revisable) y no en el conf del servidor. Se puede
+      # sobreescribir desde huly.conf si hiciera falta.
+      - ALLOWED_EMAIL_DOMAINS=${ALLOWED_EMAIL_DOMAINS:-wiwo.me,mgcglobalgroup.com}
       # HIDE_LOCAL_LOGIN tambien retira los endpoints locales del backend
       # (login, codigo por correo, invitado, alta y recuperacion de contrasena).
       - HIDE_LOCAL_LOGIN
