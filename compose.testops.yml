@@ -18,8 +18,5 @@ services:
   # Sin este override corre la imagen upstream y el cierre del acceso local no
   # tiene efecto: los endpoints siguen atendiendo peticiones.
   #
-  # Descomentar SOLO despues de que el workflow "Deploy Front" del repo del fork
-  # haya construido `wiwo/ops-account:latest` en el servidor. Antes de eso,
-  # `up -d` intentaria bajar una imagen que no existe y abortaria el despliegue.
-  # account:
-  #   image: wiwo/ops-account:latest
+  account:
+    image: wiwo/ops-account:latest
