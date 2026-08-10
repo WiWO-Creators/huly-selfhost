@@ -193,10 +193,13 @@ services:
       # aqui (versionado y revisable) y no en el conf del servidor. Se puede
       # sobreescribir desde huly.conf si hiciera falta.
       - ALLOWED_EMAIL_DOMAINS=${ALLOWED_EMAIL_DOMAINS:-wiwo.me,mgcglobalgroup.com}
-      # HIDE_LOCAL_LOGIN tambien retira los endpoints locales del backend
-      # (login, codigo por correo, invitado, alta y recuperacion de contrasena).
-      - HIDE_LOCAL_LOGIN
-      - DISABLE_SIGNUP
+      # Acceso solo con Google. HIDE_LOCAL_LOGIN, ademas de ocultar el
+      # formulario, retira del backend los endpoints locales: contrasena,
+      # codigo por correo, invitado, alta y recuperacion.
+      # Para reabrir el acceso local: poner ambas en "false" en huly.conf y
+      # `docker compose -f compose.yml -f compose.testops.yml up -d account front`.
+      - HIDE_LOCAL_LOGIN=${HIDE_LOCAL_LOGIN:-true}
+      - DISABLE_SIGNUP=${DISABLE_SIGNUP:-true}
     restart: unless-stopped
     networks:
       - huly_net
@@ -238,8 +241,8 @@ services:
       - TITLE=${TITLE:-WiWO Ops}
       # Ocultan el formulario local y el alta en la interfaz. El cierre real de
       # los endpoints lo hacen las mismas variables en el servicio `account`.
-      - HIDE_LOCAL_LOGIN
-      - DISABLE_SIGNUP
+      - HIDE_LOCAL_LOGIN=${HIDE_LOCAL_LOGIN:-true}
+      - DISABLE_SIGNUP=${DISABLE_SIGNUP:-true}
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE:-en}
       - LAST_NAME_FIRST=${LAST_NAME_FIRST:-true}
       - DESKTOP_UPDATES_CHANNEL=${DESKTOP_CHANNEL}
