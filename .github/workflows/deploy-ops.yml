@@ -47,5 +47,18 @@ jobs:
               cd /root/huly-selfhost
               bash nginx.sh
               docker compose -f compose.yml -f compose.testops.yml up -d
+
+              # Diagnóstico: qué política de acceso quedó realmente aplicada.
+              # Sin esto, la única forma de saberlo es entrar por SSH.
+              echo "--- compose resuelve:"
+              docker compose -f compose.yml -f compose.testops.yml config \
+                | grep -E "HIDE_LOCAL_LOGIN|DISABLE_SIGNUP|ALLOWED_EMAIL_DOMAINS|image: wiwo" || true
+              echo "--- el contenedor account tiene:"
+              docker compose -f compose.yml -f compose.testops.yml exec -T account env \
+                | grep -E "HIDE_LOCAL_LOGIN|DISABLE_SIGNUP|ALLOWED_EMAIL_DOMAINS" || true
+              echo "--- imágenes en uso:"
+              docker compose -f compose.yml -f compose.testops.yml ps --format '{{.Service}} {{.Image}}' \
+                | grep -E "front|account" || true
+
               echo "✅ Config deployed and containers restarted"
           DEPLOY

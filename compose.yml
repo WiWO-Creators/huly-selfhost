@@ -196,10 +196,11 @@ services:
       # Acceso solo con Google. HIDE_LOCAL_LOGIN, ademas de ocultar el
       # formulario, retira del backend los endpoints locales: contrasena,
       # codigo por correo, invitado, alta y recuperacion.
-      # Para reabrir el acceso local: poner ambas en "false" en huly.conf y
-      # `docker compose -f compose.yml -f compose.testops.yml up -d account front`.
-      - HIDE_LOCAL_LOGIN=${HIDE_LOCAL_LOGIN:-true}
-      - DISABLE_SIGNUP=${DISABLE_SIGNUP:-true}
+      # Valores fijos, sin interpolar desde huly.conf: es politica de acceso, no
+      # configuracion de entorno, y asi el estado real queda visible en git.
+      # Para reabrir el acceso local, sobreescribir en compose.testops.yml.
+      - HIDE_LOCAL_LOGIN=true
+      - DISABLE_SIGNUP=true
     restart: unless-stopped
     networks:
       - huly_net
@@ -241,8 +242,8 @@ services:
       - TITLE=${TITLE:-WiWO Ops}
       # Ocultan el formulario local y el alta en la interfaz. El cierre real de
       # los endpoints lo hacen las mismas variables en el servicio `account`.
-      - HIDE_LOCAL_LOGIN=${HIDE_LOCAL_LOGIN:-true}
-      - DISABLE_SIGNUP=${DISABLE_SIGNUP:-true}
+      - HIDE_LOCAL_LOGIN=true
+      - DISABLE_SIGNUP=true
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE:-en}
       - LAST_NAME_FIRST=${LAST_NAME_FIRST:-true}
       - DESKTOP_UPDATES_CHANNEL=${DESKTOP_CHANNEL}
