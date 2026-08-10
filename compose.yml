@@ -189,6 +189,13 @@ services:
       - GOOGLE_CLIENT_ID
       - GOOGLE_CLIENT_SECRET
       - GOOGLE_DISPLAY_NAME=${GOOGLE_DISPLAY_NAME:-Google}
+      # Sin "=" a proposito: una variable no definida no debe llegar como
+      # cadena vacia, que el codigo interpretaria como "sin restriccion".
+      - ALLOWED_EMAIL_DOMAINS
+      # HIDE_LOCAL_LOGIN tambien retira los endpoints locales del backend
+      # (login, codigo por correo, invitado, alta y recuperacion de contrasena).
+      - HIDE_LOCAL_LOGIN
+      - DISABLE_SIGNUP
     restart: unless-stopped
     networks:
       - huly_net
@@ -228,6 +235,10 @@ services:
       - COLLABORATOR_URL=ws${SECURE:+s}://${HOST_ADDRESS}/_collaborator
       - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin
       - TITLE=${TITLE:-WiWO Ops}
+      # Ocultan el formulario local y el alta en la interfaz. El cierre real de
+      # los endpoints lo hacen las mismas variables en el servicio `account`.
+      - HIDE_LOCAL_LOGIN
+      - DISABLE_SIGNUP
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE:-en}
       - LAST_NAME_FIRST=${LAST_NAME_FIRST:-true}
       - DESKTOP_UPDATES_CHANNEL=${DESKTOP_CHANNEL}

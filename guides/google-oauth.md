@@ -107,3 +107,84 @@ correo. El callback crea o enlaza un `SocialId` de tipo `GOOGLE` sobre la misma
 Generá un nuevo Client secret en la misma credencial de Google Cloud, reemplazá
 `GOOGLE_CLIENT_SECRET` en `huly.conf` y volvé a correr `docker compose up -d account`.
 El Client ID no cambia, así que no hay que tocar los redirect URIs.
+
+## Restringir el acceso a dominios autorizados
+
+Una vez que el acceso con Google funciona, se puede cerrar todo lo demás. Son tres
+variables en `huly.conf`:
+
+```
+ALLOWED_EMAIL_DOMAINS=wiwo.me,mgcglobalgroup.com
+HIDE_LOCAL_LOGIN=true
+DISABLE_SIGNUP=true
+```
+
+`ALLOWED_EMAIL_DOMAINS` es la lista de dominios de correo que pueden entrar por un
+proveedor externo, separados por comas. Vacía o ausente significa **sin restricción**,
+que es lo que conviene en desarrollo local. La comprobación vive en el backend
+(`pods/authProviders`) y cubre Google, GitHub y OpenID.
+
+`HIDE_LOCAL_LOGIN` merece una aclaración porque en Huly upstream significa otra cosa:
+allí solo oculta el formulario en la interfaz y los endpoints siguen abiertos. **En este
+fork también los retira del backend**: con la variable en `true`, el servicio de cuentas
+no registra `login`, `loginOtp`, `validateOtp`, `loginAsGuest`, `join`, `signUpJoin`,
+`changePassword`, `requestPasswordReset`, `requestPasswordSetup` ni `restorePassword`.
+Dejan de existir para el cliente, no quedan escondidos.
+
+Aplicar:
+
+```bash
+docker compose up -d account front
+```
+
+### Orden importante
+
+Activar estas variables **antes** de comprobar que Google funciona deja a todo el mundo
+afuera, y no hay forma de volver desde la interfaz. El orden seguro es:
+
+1. Cargar las credenciales de Google y aplicarlas.
+2. Entrar con una cuenta de un dominio autorizado. Que funcione de verdad.
+3. Recién entonces poner las tres variables y volver a aplicar.
+
+Para volver atrás, comentá las tres líneas en `huly.conf` y repetí el `docker compose up -d`.
+
+### Comprobar que quedó cerrado
+
+```bash
+curl -s -X POST https://<HOST_ADDRESS>/_accounts \
+  -H 'Content-Type: application/json' \
+  -d '{"method":"login","params":{"email":"x@y.z","password":"x"}}'
+```
+
+Tiene que responder que el método no existe, no procesar la petición. Lo mismo con
+`loginOtp` y `signUpJoin`. Y en `/login` no debe haber formulario de correo: solo el
+botón de Google.
+
+Un intento desde un dominio no autorizado vuelve a `/login?authError=domain` con un
+mensaje explicándolo, y deja una línea en los logs:
+
+```bash
+docker compose logs account | grep -i 'domain not allowed'
+```
+
+## Borrar las contraseñas existentes
+
+Cerrar los endpoints alcanza para que nadie entre con contraseña, pero los hashes
+siguen guardados. Para eliminarlos —y que la vuelta atrás no reabra el acceso viejo—
+hay una tabla dedicada:
+
+```bash
+# Backup primero
+docker compose exec cockroach cockroach sql --insecure \
+  -e 'SELECT * FROM global_account.account_passwords;' > passwords-backup.txt
+
+# Confirmar el nombre real del esquema (depende de DB_NS)
+docker compose exec cockroach cockroach sql --insecure -e 'SHOW TABLES;'
+
+# Borrar
+docker compose exec cockroach cockroach sql --insecure \
+  -e 'DELETE FROM global_account.account_passwords;'
+```
+
+Esto no borra cuentas ni usuarios: solo la credencial. Al entrar por Google, el
+usuario cae en la misma `Person` de siempre, porque el enlace se hace por el correo.

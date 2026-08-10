@@ -1,0 +1,25 @@
+# Overrides de ops.wiwo.me: los servicios que se construyen desde el fork
+# (github.com/WiWO-Creators/wiwo.ops-front) en vez de usar la imagen upstream.
+#
+# Se aplica siempre junto al principal:
+#   docker compose -f compose.yml -f compose.testops.yml up -d
+#
+# Las imagenes van fijadas a `latest`. El workflow "Deploy Front" del repo del
+# fork reconstruye y reetiqueta esas dos imagenes en el propio servidor, y
+# `up -d` recrea el contenedor porque cambia el id de la imagen. Fijar aqui una
+# version concreta provocaria que el rsync de este repo revirtiera el despliegue
+# del otro.
+services:
+  # Interfaz web: tema Neo, pantalla de acceso y traducciones propias.
+  front:
+    image: wiwo/ops-front:latest
+
+  # Servicio de cuentas: acceso solo con Google y filtro por dominio de correo.
+  # Sin este override corre la imagen upstream y el cierre del acceso local no
+  # tiene efecto: los endpoints siguen atendiendo peticiones.
+  #
+  # Descomentar SOLO despues de que el workflow "Deploy Front" del repo del fork
+  # haya construido `wiwo/ops-account:latest` en el servidor. Antes de eso,
+  # `up -d` intentaria bajar una imagen que no existe y abortaria el despliegue.
+  # account:
+  #   image: wiwo/ops-account:latest

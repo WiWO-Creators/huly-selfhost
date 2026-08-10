@@ -223,6 +223,10 @@ export LAST_NAME_FIRST=${LAST_NAME_FIRST:-true}
 export GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
 export GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
 export GOOGLE_DISPLAY_NAME=${GOOGLE_DISPLAY_NAME:-Google}
+# Allowlist de dominios y cierre del acceso local: tambien se preservan.
+export ALLOWED_EMAIL_DOMAINS=${ALLOWED_EMAIL_DOMAINS}
+export HIDE_LOCAL_LOGIN=${HIDE_LOCAL_LOGIN}
+export DISABLE_SIGNUP=${DISABLE_SIGNUP}
 export CR_DATABASE=${CR_DATABASE:-defaultdb}
 export CR_USERNAME=${CR_USERNAME:-selfhost}
 export REDPANDA_ADMIN_USER=${REDPANDA_ADMIN_USER:-superadmin}
@@ -240,6 +244,10 @@ envsubst < .template.huly.conf > $CONFIG_FILE
 # Google OAuth: si las credenciales quedaron vacias se comentan. Una cadena vacia
 # llegaria al contenedor `account` y passport fallaria al exigir un clientID.
 sed -i -e '/^GOOGLE_CLIENT_ID=$/s/^/#/' -e '/^GOOGLE_CLIENT_SECRET=$/s/^/#/' "$CONFIG_FILE"
+
+# Acceso solo con Google: una variable definida y vacia significaria "sin
+# restriccion de dominio" y "acceso local abierto". Se comentan si estan vacias.
+sed -i -e '/^ALLOWED_EMAIL_DOMAINS=$/s/^/#/' -e '/^HIDE_LOCAL_LOGIN=$/s/^/#/' -e '/^DISABLE_SIGNUP=$/s/^/#/' "$CONFIG_FILE"
 
 source "$CONFIG_FILE"
 export CR_DB_URL=$CR_DB_URL
