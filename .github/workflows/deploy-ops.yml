@@ -46,19 +46,25 @@ jobs:
               set -e
               cd /root/huly-selfhost
               bash nginx.sh
-              docker compose -f compose.yml -f compose.testops.yml up -d
+              docker compose -f compose.yml -f compose.testops.yml up -d < /dev/null
 
-              # Diagnóstico: qué política de acceso quedó realmente aplicada.
-              # Sin esto, la única forma de saberlo es entrar por SSH.
-              echo "--- compose resuelve:"
-              docker compose -f compose.yml -f compose.testops.yml config \
-                | grep -E "HIDE_LOCAL_LOGIN|DISABLE_SIGNUP|ALLOWED_EMAIL_DOMAINS|image: wiwo" || true
-              echo "--- el contenedor account tiene:"
-              docker compose -f compose.yml -f compose.testops.yml exec -T account env \
+              # `up -d` no estaba recreando front ni account pese a cambiar sus
+              # variables de entorno, así que la política de acceso no llegaba a
+              # aplicarse. Se fuerza la recreación de esos dos.
+              docker compose -f compose.yml -f compose.testops.yml up -d \
+                --force-recreate front account < /dev/null
+
+              # Diagnóstico: sin SSH, esta es la única forma de ver qué quedó
+              # realmente aplicado. El `< /dev/null` es obligatorio: los comandos
+              # que leen stdin se comen el resto del heredoc del ssh.
+              echo "--- contenedores en ejecución:"
+              docker ps --format '{{.Names}}\t{{.Image}}' < /dev/null | grep -E "front|account" || true
+              echo "--- variables del contenedor account:"
+              docker compose -f compose.yml -f compose.testops.yml exec -T account env < /dev/null \
                 | grep -E "HIDE_LOCAL_LOGIN|DISABLE_SIGNUP|ALLOWED_EMAIL_DOMAINS" || true
-              echo "--- imágenes en uso:"
-              docker compose -f compose.yml -f compose.testops.yml ps --format '{{.Service}} {{.Image}}' \
-                | grep -E "front|account" || true
+              echo "--- variables del contenedor front:"
+              docker compose -f compose.yml -f compose.testops.yml exec -T front env < /dev/null \
+                | grep -E "HIDE_LOCAL_LOGIN|DISABLE_SIGNUP" || true
 
               echo "✅ Config deployed and containers restarted"
           DEPLOY
