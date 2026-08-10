@@ -219,6 +219,10 @@ export HTTP_BIND=$HTTP_BIND
 export TITLE=${TITLE:-WiWO Ops}
 export DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE:-en}
 export LAST_NAME_FIRST=${LAST_NAME_FIRST:-true}
+# Google OAuth: se preservan los valores del conf existente (sourced arriba).
+export GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+export GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+export GOOGLE_DISPLAY_NAME=${GOOGLE_DISPLAY_NAME:-Google}
 export CR_DATABASE=${CR_DATABASE:-defaultdb}
 export CR_USERNAME=${CR_USERNAME:-selfhost}
 export REDPANDA_ADMIN_USER=${REDPANDA_ADMIN_USER:-superadmin}
@@ -232,6 +236,10 @@ export COCKROACH_SECRET=$(cat .cr.secret)
 export REDPANDA_SECRET=$(cat .rp.secret)
 
 envsubst < .template.huly.conf > $CONFIG_FILE
+
+# Google OAuth: si las credenciales quedaron vacias se comentan. Una cadena vacia
+# llegaria al contenedor `account` y passport fallaria al exigir un clientID.
+sed -i -e '/^GOOGLE_CLIENT_ID=$/s/^/#/' -e '/^GOOGLE_CLIENT_SECRET=$/s/^/#/' "$CONFIG_FILE"
 
 source "$CONFIG_FILE"
 export CR_DB_URL=$CR_DB_URL

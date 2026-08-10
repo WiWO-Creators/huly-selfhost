@@ -181,6 +181,14 @@ services:
       - ACCOUNTS_URL=http${SECURE:+s}://${HOST_ADDRESS}/_accounts
       - ACCOUNT_PORT=3000
       - QUEUE_CONFIG=redpanda:9092
+      # Google OAuth: el provider solo se registra si ambas variables existen.
+      # Van sin "=" a proposito: asi, si no estan definidas en huly.conf, tampoco
+      # se definen dentro del contenedor. Pasarlas como cadena vacia registraria
+      # la estrategia de passport sin clientID y el servicio no arrancaria.
+      # Ver guides/google-oauth.md.
+      - GOOGLE_CLIENT_ID
+      - GOOGLE_CLIENT_SECRET
+      - GOOGLE_DISPLAY_NAME=${GOOGLE_DISPLAY_NAME:-Google}
     restart: unless-stopped
     networks:
       - huly_net
