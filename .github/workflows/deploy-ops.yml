@@ -54,6 +54,11 @@ jobs:
               docker compose -f compose.yml -f compose.testops.yml up -d \
                 --force-recreate front account < /dev/null
 
+              # nginx resuelve las IPs de los upstream al arrancar y las cachea:
+              # tras recrear front y account apunta a IPs que ya no existen y
+              # devuelve 502. Hay que reiniciarlo después, siempre.
+              docker compose -f compose.yml -f compose.testops.yml restart nginx < /dev/null
+
               # Diagnóstico: sin SSH, esta es la única forma de ver qué quedó
               # realmente aplicado. El `< /dev/null` es obligatorio: los comandos
               # que leen stdin se comen el resto del heredoc del ssh.
