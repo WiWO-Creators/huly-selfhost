@@ -167,6 +167,90 @@ mensaje explicándolo, y deja una línea en los logs:
 docker compose logs account | grep -i 'domain not allowed'
 ```
 
+### El alta sigue abierta para los dominios autorizados
+
+`DISABLE_SIGNUP=true` cierra el alta para todo el mundo **salvo** los correos que pasan
+`ALLOWED_EMAIL_DOMAINS`: la lista de dominios hace de invitación permanente. Alguien de
+`wiwo.me` que nunca entró antes obtiene su cuenta en el primer acceso con Google; alguien
+de fuera de la lista no pasa del filtro de dominio.
+
+Si `ALLOWED_EMAIL_DOMAINS` está vacía o ausente, no hay allowlist que valga como
+autorización y `DISABLE_SIGNUP=true` bloquea cualquier alta nueva: quien no tenga cuenta
+previa recibe `/login?authError=noaccount` y el mensaje "Tu cuenta todavía no está
+habilitada". Es el comportamiento pensado para desarrollo local, no para producción.
+
+## Diagnosticar un correo que rebota al ingreso
+
+Cuando alguien dice que elige su cuenta en Google y vuelve a la pantalla de ingreso, el
+parámetro `authError` de la URL ya dice qué pasó:
+
+| URL a la que vuelve | Qué significa |
+|---|---|
+| `/login?authError=domain` | el correo (o el claim `hd`) no está en `ALLOWED_EMAIL_DOMAINS` |
+| `/login?authError=noaccount` | no hay cuenta y el alta está cerrada — revisar `ALLOWED_EMAIL_DOMAINS` |
+| `/login?authError=provider` | fallo del proveedor: canceló en Google, correo sin verificar, `id_token` inválido, o error del servicio |
+| `/login` sin parámetro | no llegó a intentar entrar |
+
+### En los logs
+
+Cada intento deja rastro en el servicio `account`. Con el correo a mano:
+
+```bash
+docker compose logs --since 30m account | grep -i 'alguien@wiwo.me'
+```
+
+Las líneas que importan, en orden de aparición:
+
+| Texto | Qué indica |
+|---|---|
+| `try auth via` | arrancó el flujo |
+| `Rejected auth: id_token check failed` | rechazo antes de tocar la base; el campo `reason` dice cuál: `id_token`, `issuer`, `audience`, `email_not_verified` o `domain` |
+| `Rejected auth: email domain not allowed` | dominio fuera de la allowlist |
+| `Failed to auth: no associated account found` | sin cuenta y con el alta cerrada |
+| `failed to auth` | excepción del servicio; el objeto `err` trae el motivo |
+| `Provider auth success` / `Success auth, redirect` | entró bien |
+
+### En la base de datos
+
+El esquema de cuentas es `global_account` (CockroachDB). Estado completo de un correo:
+
+```bash
+docker compose exec cockroach cockroach sql --insecure -e "
+  SELECT s.type, s.value, s.verified_on, p.first_name, p.last_name,
+         a.uuid IS NOT NULL AS tiene_cuenta
+  FROM global_account.social_id s
+  JOIN global_account.person p ON p.uuid = s.person_uuid
+  LEFT JOIN global_account.account a ON a.uuid = s.person_uuid
+  WHERE s.value = 'alguien@wiwo.me';"
+```
+
+Lectura del resultado:
+
+- **Sin filas**: la persona no existe todavía. Con la allowlist configurada, el primer
+  acceso con Google la crea; si igual rebota, el motivo está en los logs.
+- **Filas con `tiene_cuenta = false`**: la persona existe pero no tiene cuenta. Es el caso
+  de quien fue importado desde Perfex como contacto (`ensurePerson` crea la persona y su
+  correo, no la cuenta). Con la allowlist configurada, el acceso con Google le crea la
+  cuenta encima de esa misma persona y conserva su historial.
+- **`verified_on` nulo** en el `social_id` de tipo `email`: el correo nunca se confirmó. El
+  acceso por Google lo confirma solo.
+- **Sin fila de tipo `google`**: todavía no entró nunca por Google; se crea al primer
+  acceso y queda enlazada a la misma persona.
+
+Espacios de trabajo a los que pertenece:
+
+```bash
+docker compose exec cockroach cockroach sql --insecure -e "
+  SELECT w.url, w.name, m.role
+  FROM global_account.workspace_members m
+  JOIN global_account.workspace w ON w.uuid = m.workspace_uuid
+  JOIN global_account.social_id s ON s.person_uuid = m.account_uuid
+  WHERE s.value = 'alguien@wiwo.me';"
+```
+
+Sin filas, la persona entra igual pero aterriza en la pantalla de selección, donde puede
+unirse a los espacios abiertos por las invitaciones `OPS_INVITE_*` del `compose.yml`.
+
 ## Borrar las contraseñas existentes
 
 Cerrar los endpoints alcanza para que nadie entre con contraseña, pero los hashes

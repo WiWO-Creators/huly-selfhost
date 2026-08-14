@@ -1,3 +1,11 @@
+# Sólo manda "Connection: upgrade" cuando el pedido es de verdad un WebSocket.
+# Con el valor fijo "upgrade", los POST normales al transactor (por ejemplo
+# /api/v1/ensure-person) llegaban como si fueran un handshake y el servidor los rechazaba con 400.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
 server {
     listen 80;
     server_name _;
@@ -75,7 +83,7 @@ server {
 
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
         rewrite ^/_collaborator(/.*)$ $1 break;
         proxy_pass http://collaborator:3078/;
     }
@@ -88,7 +96,7 @@ server {
         
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
         rewrite ^/_transactor(/.*)$ $1 break;
         proxy_pass http://transactor:3333/;
     }
@@ -101,7 +109,7 @@ server {
         
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
         proxy_pass http://transactor:3333;
     }
 

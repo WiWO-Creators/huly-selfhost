@@ -248,6 +248,12 @@ services:
       - LAST_NAME_FIRST=${LAST_NAME_FIRST:-true}
       - DESKTOP_UPDATES_CHANNEL=${DESKTOP_CHANNEL}
       - DISABLED_FEATURES=auto-translate,mailboxes
+      # Invitaciones permanentes que la pantalla de ingreso ofrece a quien todavia no
+      # pertenece a un espacio de trabajo. Se generan con `perfex-clients invitacion`.
+      - OPS_INVITE_MGC=${OPS_INVITE_MGC}
+      - OPS_INVITE_PALTA=${OPS_INVITE_PALTA}
+      - OPS_INVITE_WIWO=${OPS_INVITE_WIWO}
+      - OPS_INVITE_SIN_CLASIFICAR=${OPS_INVITE_SIN_CLASIFICAR}
     restart: unless-stopped
     networks:
       - huly_net
