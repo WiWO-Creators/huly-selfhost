@@ -1,0 +1,142 @@
+# PROPUESTA — NO APLICADA. Configuracion del SFU de LiveKit self-hosted.
+#
+# Verificada linea por linea contra config-sample.yaml y pkg/config/config.go
+# de livekit/livekit v1.13.5 (release del 31/7/2026), no contra la memoria.
+#
+# ESTE ARCHIVO NO CONTIENE SECRETOS y por eso se puede versionar. Las claves
+# de API entran por la variable de entorno LIVEKIT_KEYS que arma el compose a
+# partir de LIVEKIT_API_KEY y LIVEKIT_API_SECRET de huly_v7.conf
+# (cmd/server/main.go:60-64 y pkg/config/config.go:916-920).
+#
+# Al aplicar, este archivo se mueve a backend/wiwo.ops/livekit.yaml, junto a
+# compose.yml, y se corrige la ruta del volumen.
+
+# Señalizacion HTTP/WebSocket y API de RoomService.
+port: 7880
+
+# Solo loopback. El nginx del host publica este puerto como
+# wss://livekit.wiwo.me sobre 443, con el mismo certificado del dominio.
+# Sin esta linea, 7880 quedaria escuchando en la IP publica en texto plano:
+# el contenedor corre con network_mode: host y no hay ufw activo.
+# bind_addresses solo afecta al listener HTTP (pkg/service/server.go:231-241);
+# el media y el TURN siguen escuchando en todas las interfaces, que es lo que
+# hace falta.
+bind_addresses:
+  - 127.0.0.1
+
+# false es el default; explicito porque en modo development LiveKit cambia los
+# puertos de relay del TURN y afloja validaciones.
+development: false
+
+logging:
+  level: info
+  json: false
+
+# keys:
+#   NO van aca. Llegan por LIVEKIT_KEYS (formato exacto "clave: secreto", con
+#   el espacio). Si no llega ninguna de las dos formas, el server no arranca:
+#   "one of key-file or keys must be provided" (pkg/config/config.go:26).
+
+# redis:
+#   No hace falta. Redis solo se necesita para operar en modo distribuido
+#   (varios nodos SFU) o para el egress de grabacion. Con un unico nodo,
+#   LiveKit guarda el estado en memoria.
+
+rtc:
+  # ICE/TCP. Es el unico camino cuando la red del cliente bloquea UDP y
+  # tampoco puede usar el TURN. No puede ir detras de nginx ni de TLS: el
+  # transporte WebRTC ya viene cifrado.
+  tcp_port: 7881
+
+  # UDP mux: todo el media entra por este rango en lugar del rango historico
+  # 50000-60000. Dos motivos concretos:
+  #   1. Son 32 puertos a abrir en el firewall en vez de 10.001.
+  #   2. 50000-60000 se solapa con el rango efimero de Linux (32768-60999):
+  #      cualquier conexion saliente del servidor puede haber tomado ya uno de
+  #      esos puertos y el SFU arranca con un candidato muerto.
+  # LiveKit recomienda un rango de tamaño >= cantidad de vCPU; el servidor
+  # tiene 32, asi que 7882-7913 son 32 puertos.
+  # IMPORTANTE: port_range_start y port_range_end NO deben definirse, o el mux
+  # no toma efecto (config-sample.yaml, seccion rtc).
+  udp_port: 7882-7913
+
+  # La IP publica esta directamente en la interfaz, sin NAT. No hay nada que
+  # descubrir: con use_external_ip: true LiveKit haria una consulta STUN y un
+  # self-ping en cada arranque para averiguar una IP que ya tiene.
+  use_external_ip: false
+
+  # Solo tiene efecto con use_external_ip: false. Fija la IP que se anuncia a
+  # los clientes como candidato host y la que usa el TURN para construir sus
+  # candidatos de relay. Si esto quedara en una IP de docker, el TURN
+  # entregaria un relay inalcanzable y la llamada fallaria solo para los
+  # usuarios que dependen de el: el peor sintoma posible, porque le funciona a
+  # casi todos.
+  node_ip: 216.194.172.8
+
+  # El host tiene docker0 y una br-* por cada red de compose, todas con IPs
+  # privadas. Sin este filtro LiveKit las anuncia como candidatos host: no
+  # rompen la llamada, pero alargan la negociacion ICE de cada ingreso.
+  ips:
+    includes:
+      - 216.194.172.8/32
+
+turn:
+  enabled: true
+
+  # Tiene que coincidir con el SAN del certificado, o el cliente rechaza el
+  # TURN/TLS por nombre y cae silenciosamente a no tener relay.
+  domain: livekit.wiwo.me
+
+  # TURN/UDP. Ademas hace de servidor STUN para los clientes.
+  udp_port: 3478
+
+  # TURN/TLS. El puerto ideal seria 443 (pasa cualquier firewall corporativo),
+  # pero 443/tcp ya es del nginx del host. Ver la seccion "Puertos" del README:
+  # 5349 es el estandar y es lo que se propone; mover el TURN/TLS a 443 exige
+  # tocar el ingress de produccion y queda como escalamiento, no como v1.
+  tls_port: 5349
+
+  # Certificado emitido para livekit.wiwo.me. Es el MISMO que usa el nginx del
+  # host para el WebSocket: un solo dominio, un solo certificado.
+  # LiveKit lee estos archivos al arrancar y no los recarga solo: la renovacion
+  # necesita reiniciar el contenedor (ver el --deploy-hook del README).
+  cert_file: /etc/letsencrypt/live/livekit.wiwo.me/fullchain.pem
+  key_file: /etc/letsencrypt/live/livekit.wiwo.me/privkey.pem
+
+  # Puertos que el TURN asigna para hablar con el SFU. Es trafico del host
+  # contra si mismo: NO hay que abrirlos en ningun firewall externo.
+  # Se fijan porque el default fuera de modo development es 30000-40000
+  # (pkg/config/config.go:589-597) y no tiene sentido reservar 10.000 puertos
+  # para quince personas. Uno por participante que caiga en relay.
+  relay_range_start: 30000
+  relay_range_end: 30100
+
+  # Vida de las credenciales del TURN, en segundos. 300 es el default.
+  # Las credenciales las emite LiveKit y quedan atadas a una conexion de
+  # señalizacion ya establecida: este TURN no es un relay abierto.
+  ttl_seconds: 300
+
+  # NO agregar allow_restricted_peer_cidrs.
+  # Con la lista vacia (default), el TURN rechaza como destino cualquier CIDR
+  # restringido: loopback, privadas, link-local, multicast. Eso es lo unico
+  # que impide que alguien con una cuenta valida use este TURN como trampolin
+  # hacia minio, cockroach, elastic o cualquier otra cosa de la red interna.
+  # Si alguna vez hiciera falta habilitar un rango, se documenta y se justifica.
+
+room:
+  # Huly crea las salas al vuelo cuando alguien entra (love /getToken).
+  auto_create: true
+  empty_timeout: 300
+  departure_timeout: 20
+  # Tope duro por sala. Una reunion de agencia no llega a 25; el numero esta
+  # para que un token filtrado no pueda levantar una sala de 500 personas en
+  # el mismo servidor que corre el ERP.
+  max_participants: 25
+
+limit:
+  # ~800 Mbps. El default es 1 GB/s, o sea casi el enlace entero de 10 Gbps.
+  # Este servidor ademas corre Huly y ya mueve del orden de 1,3 TB por semana:
+  # el tope existe para que una sala no se lleve el enlace por delante.
+  # Sin guion bajo a proposito: los separadores dependen de la version del
+  # parser de YAML y aca no vale la pena arriesgar.
+  bytes_per_sec: 100000000

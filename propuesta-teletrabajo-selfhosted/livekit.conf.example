@@ -1,0 +1,35 @@
+# PROPUESTA — NO APLICADA. Lineas a agregar al final de huly_v7.conf en el
+# servidor. Ese archivo esta en .gitignore a proposito: los secretos no se
+# versionan. Este ejemplo si se versiona, con los valores en blanco.
+#
+# Son las MISMAS tres variables que la opcion LiveKit Cloud
+# (propuesta-teletrabajo/livekit.conf.example). Lo unico que cambia es el valor
+# de LIVEKIT_HOST: en vez del proyecto de livekit.cloud, nuestro dominio.
+# El mismo valor lo consumen `love` como LIVEKIT_HOST y `front` como
+# LIVEKIT_WS; por eso es una variable y no dos.
+#
+# LIVEKIT_HOST lleva el protocolo (README.md:503). Es wss:// porque el nginx
+# del host termina el TLS y proxea al 7880 del SFU.
+
+LIVEKIT_HOST=wss://livekit.wiwo.me
+LIVEKIT_API_KEY=
+LIVEKIT_API_SECRET=
+
+# --- Como se generan la key y el secret -------------------------------------
+#
+# Los genera el propio binario de LiveKit, en el servidor, y NO se escriben en
+# ningun archivo versionado ni se pegan en un chat:
+#
+#     docker run --rm livekit/livekit-server:v1.13.5 generate-keys
+#
+# Devuelve dos lineas, "API Key" y "API Secret". Se copian aca, se guarda
+# huly_v7.conf y se comprueba que siga en 600:
+#
+#     chmod 600 huly_v7.conf
+#
+# El compose arma con estas dos la variable LIVEKIT_KEYS que consume el SFU
+# ("clave: secreto"), asi que no hay que escribir el secreto dos veces.
+#
+# Rotarlas: generar un par nuevo, reemplazar las dos lineas, y
+# `docker compose up -d livekit love front`. Las reuniones en curso se cortan;
+# no hay migracion ni estado que perder.

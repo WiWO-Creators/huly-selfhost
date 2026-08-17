@@ -1,0 +1,128 @@
+# PROPUESTA — NO APLICADA. LiveKit self-hosted (SFU + TURN embebido) y el
+# servicio `love` de Huly apuntando contra el.
+#
+# Escrito como override de compose para poder revisarlo entero sin tocar nada:
+#
+#     docker compose -f compose.yml -f propuesta-teletrabajo-selfhosted/compose.livekit.yml config
+#
+# Una vez aprobado, se pegan los tres bloques dentro de compose.yml, se mueve
+# livekit.yaml al lado de compose.yml y se corrige la ruta del volumen.
+# Antes de aplicar nada en ops.wiwo.me: ./backup-create.sh
+#
+# Requiere LIVEKIT_HOST, LIVEKIT_API_KEY y LIVEKIT_API_SECRET en huly_v7.conf.
+# Ver livekit.conf.example en esta misma carpeta.
+
+services:
+  livekit:
+    # Tag explicito, nunca latest: v1.13.5 es la ultima release estable
+    # (31/7/2026) y es la version contra la que se verifico livekit.yaml.
+    # `latest` en un SFU significa que un reinicio cualquiera puede cambiar el
+    # comportamiento del media sin que nadie lo haya pedido.
+    image: livekit/livekit-server:v1.13.5
+    command: --config /etc/livekit.yaml
+
+    # ROMPE LA CONVENCION DEL ARCHIVO A PROPOSITO: no va en huly_net.
+    #
+    # Es el modo que usa el propio docker-compose que genera LiveKit para
+    # instalaciones en VM, y el motivo es el media:
+    #   - Con red bridge, todo el trafico UDP pasa por el NAT de docker. El
+    #     puerto de origen saliente puede no coincidir con el publicado y el
+    #     resultado tipico es audio en un solo sentido, intermitente y
+    #     dificilisimo de diagnosticar.
+    #   - El TURN embebido entrega candidatos de relay con la IP publica del
+    #     host. Desde un contenedor en bridge, el SFU tendria que hacer
+    #     hairpin contra la IP publica del propio host para llegar a su propio
+    #     relay.
+    # Ningun otro servicio necesita alcanzar a livekit por nombre de red:
+    # `love` y el navegador lo alcanzan por wss://livekit.wiwo.me.
+    #
+    # Consecuencia de seguridad, explicada en el README: este contenedor no
+    # tiene aislamiento de red. Por eso 7880 se ata a 127.0.0.1 en
+    # livekit.yaml y los limites de CPU/memoria de abajo no son decorativos.
+    network_mode: host
+
+    environment:
+      # Formato exacto "clave: secreto", con el espacio
+      # (cmd/server/main.go:60-64, pkg/config/config.go:916-920). Va entrecomillado
+      # porque sin comillas YAML leeria `- LIVEKIT_KEYS=API...: secreto` como un
+      # mapa y no como cadena, y compose fallaria con un error poco claro.
+      # Se arma desde las dos variables que ya necesita `love`: una sola fuente
+      # de verdad en huly_v7.conf, sin duplicar el secreto.
+      - "LIVEKIT_KEYS=${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+
+    volumes:
+      # Al aplicar: mover el archivo a ./livekit.yaml y dejar
+      #   - ./livekit.yaml:/etc/livekit.yaml:ro
+      - ./propuesta-teletrabajo-selfhosted/livekit.yaml:/etc/livekit.yaml:ro
+      # Solo lectura. Hace falta el arbol completo y no la carpeta live/,
+      # porque live/ son symlinks a ../../archive/.
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+
+    healthcheck:
+      # GET / devuelve "OK" cuando el nodo esta listo, y 406 "Not Ready" si las
+      # estadisticas del nodo tienen mas de 4 segundos
+      # (pkg/service/server.go:399-419). wget viene en el busybox de la imagen
+      # alpine.
+      test: ['CMD', 'wget', '-q', '-O-', 'http://127.0.0.1:7880/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+    deploy:
+      resources:
+        limits:
+          # El servidor tiene 32 nucleos y 89 GB libres; quince personas en
+          # video no mueven la aguja. El tope existe para que una sala grande
+          # o un pico raro no le saque CPU a cockroach, elastic y el
+          # transactor, que corren en la misma maquina.
+          cpus: '8'
+          memory: 4G
+
+    restart: unless-stopped
+
+  # Identico al de propuesta-teletrabajo/compose.love.yml (la opcion Cloud): el
+  # servicio `love` no distingue entre un LiveKit propio y uno de LiveKit
+  # Cloud, solo consume LIVEKIT_HOST. Se repite aca para que esta carpeta se
+  # pueda aplicar sola, sin ir a buscar media receta a la otra.
+  love:
+    image: hardcoreeng/love:${HULY_VERSION}
+    depends_on:
+      account:
+        condition: service_started
+      minio:
+        condition: service_healthy
+    environment:
+      - PORT=8096
+      - SECRET=${SECRET}
+      - ACCOUNTS_URL=http://account:3000
+      - STATS_URL=http://stats:4900
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin
+      - STORAGE_PROVIDER_NAME=minio
+      # Van sin "=" a proposito, igual que GOOGLE_CLIENT_ID en el servicio
+      # `account` (compose.yml:184-190). Si faltan en huly_v7.conf quedan
+      # indefinidas dentro del contenedor y el servicio muere al arrancar con
+      # "Missing env variables: LIVEKIT_HOST, ..." (services/love/src/config.ts:80-87).
+      # Pasadas como cadena vacia el servicio arrancaria igual y el fallo
+      # recien apareceria al entrar a una sala, que es mucho mas dificil de
+      # diagnosticar.
+      - LIVEKIT_HOST
+      - LIVEKIT_API_KEY
+      - LIVEKIT_API_SECRET
+    restart: unless-stopped
+    networks:
+      - huly_net
+
+  # Sin `depends_on: livekit` a proposito: love no habla con el SFU al
+  # arrancar, sino recien cuando alguien entra a una sala. Ademas livekit esta
+  # en la red del host y el orden de arranque no le aporta nada.
+
+  front:
+    environment:
+      # El navegador se conecta al SFU en forma directa, no a traves de /_love.
+      # Sin esta variable el front sirve LIVEKIT_WS=""
+      # (pods/front/src/__start.ts:41) y, como el guardia de la sala compara
+      # contra undefined y no contra cadena vacia
+      # (plugins/love-resources/src/components/Room.svelte:40-44), la sala se
+      # abre igual y se queda sin conectar, sin mostrar siquiera el cartel
+      # "El servicio no esta configurado".
+      - LIVEKIT_WS=${LIVEKIT_HOST}
