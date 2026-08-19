@@ -139,7 +139,7 @@ services:
       - huly_net
 
   transactor:
-    image: hardcoreeng/transactor:${HULY_VERSION}
+    image: ${TRANSACTOR_IMAGE:-hardcoreeng/transactor:${HULY_VERSION}}
     environment:
       - SERVER_PORT=3333
       - SERVER_SECRET=${SECRET}
@@ -206,7 +206,7 @@ services:
       - huly_net
 
   workspace:
-    image: hardcoreeng/workspace:${HULY_VERSION}
+    image: ${WORKSPACE_IMAGE:-hardcoreeng/workspace:${HULY_VERSION}}
     environment:
       - SERVER_SECRET=${SECRET}
       - DB_URL=${CR_DB_URL}
