@@ -192,7 +192,7 @@ services:
       # Dominios autorizados a entrar por Google. No es un secreto, asi que vive
       # aqui (versionado y revisable) y no en el conf del servidor. Se puede
       # sobreescribir desde huly.conf si hiciera falta.
-      - ALLOWED_EMAIL_DOMAINS=${ALLOWED_EMAIL_DOMAINS:-wiwo.me,mgcglobalgroup.com}
+      - ALLOWED_EMAIL_DOMAINS=${ALLOWED_EMAIL_DOMAINS:-wiwo.me,mgcglobalgroup.com,hlprods.com,hubmgc.com}
       # Acceso solo con Google. HIDE_LOCAL_LOGIN, ademas de ocultar el
       # formulario, retira del backend los endpoints locales: contrasena,
       # codigo por correo, invitado, alta y recuperacion.
