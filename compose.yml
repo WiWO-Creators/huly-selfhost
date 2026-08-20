@@ -240,6 +240,10 @@ services:
       - COLLABORATOR_URL=ws${SECURE:+s}://${HOST_ADDRESS}/_collaborator
       - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin
       - TITLE=${TITLE:-WiWO Ops}
+      # Sin esta variable el front no publica BRANDING_URL en config.json y el cliente
+      # arranca sin marca: ignora dev/prod/public/branding.json y cae en los valores por
+      # defecto de upstream (abre en Seguimiento en vez de Inicio, idioma y titulo genericos).
+      - BRANDING_URL=${BRANDING_URL:-/branding.json}
       # Ocultan el formulario local y el alta en la interfaz. El cierre real de
       # los endpoints lo hacen las mismas variables en el servicio `account`.
       - HIDE_LOCAL_LOGIN=true
