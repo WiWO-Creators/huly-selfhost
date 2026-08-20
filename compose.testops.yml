@@ -4,8 +4,8 @@
 # Se aplica siempre junto al principal:
 #   docker compose -f compose.yml -f compose.testops.yml up -d
 #
-# Las imagenes van fijadas a `latest`. El workflow "Deploy Front" del repo del
-# fork reconstruye y reetiqueta esas dos imagenes en el propio servidor, y
+# Las imagenes van fijadas a `latest`. El workflow "Deploy" del repo del
+# fork reconstruye y reetiqueta estas imagenes en el propio servidor, y
 # `up -d` recrea el contenedor porque cambia el id de la imagen. Fijar aqui una
 # version concreta provocaria que el rsync de este repo revirtiera el despliegue
 # del otro.
@@ -20,3 +20,15 @@ services:
   #
   account:
     image: wiwo/ops-account:latest
+
+  # Transactor: trae el modelo del fork (roles Focal/Equipo/Restringido,
+  # permisos de tarea, campos del proyecto) y el recorte de lectura por
+  # colaborador. Con la imagen upstream nada de eso existe en el workspace,
+  # por mucho que este mergeado en `develop`.
+  transactor:
+    image: wiwo/ops-transactor:latest
+
+  # Workspace: corre las migraciones de modelo sobre cada workspace, asi que
+  # tiene que ir a la par del transactor.
+  workspace:
+    image: wiwo/ops-workspace:latest
