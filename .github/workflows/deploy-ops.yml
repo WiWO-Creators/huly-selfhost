@@ -48,11 +48,13 @@ jobs:
               bash nginx.sh
               docker compose -f compose.yml -f compose.testops.yml up -d < /dev/null
 
-              # `up -d` no estaba recreando front ni account pese a cambiar sus
-              # variables de entorno, así que la política de acceso no llegaba a
-              # aplicarse. Se fuerza la recreación de esos dos.
+              # `up -d` no recrea estos contenedores aunque cambie su imagen o
+              # sus variables: front y account se quedaban con la política de
+              # acceso vieja, y transactor y workspace seguían corriendo la
+              # imagen de upstream con el compose ya apuntando a la propia, así
+              # que el modelo del fork no llegaba nunca al workspace. Se fuerza.
               docker compose -f compose.yml -f compose.testops.yml up -d \
-                --force-recreate front account < /dev/null
+                --force-recreate front account transactor workspace < /dev/null
 
               # nginx resuelve las IPs de los upstream al arrancar y las cachea:
               # tras recrear front y account apunta a IPs que ya no existen y
