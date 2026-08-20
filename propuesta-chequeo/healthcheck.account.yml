@@ -1,0 +1,54 @@
+# PROPUESTA — NO APLICADA. Healthcheck del servicio `account`.
+#
+# Escrito como override de compose para que se pueda revisar y probar sin tocar
+# nada:
+#
+#     docker compose -f compose.yml -f compose.testops.yml \
+#         -f propuesta-chequeo/healthcheck.account.yml config
+#     docker compose -f compose.yml -f compose.testops.yml \
+#         -f propuesta-chequeo/healthcheck.account.yml up -d account
+#
+# Una vez aprobado, pegar el bloque `healthcheck` dentro de compose.yml, en el
+# servicio `account` (junto a `restart: unless-stopped`, ~linea 204) y borrar esta
+# carpeta: el estado real del despliegue conviene que quede en un unico archivo
+# versionado.
+#
+# QUE PRUEBA Y POR QUE ASI
+# ------------------------
+# La caida del 17/08/2026 fue perdida de SALIDA a internet: el contenedor seguia
+# `Up` y su puerto 3000 seguia atendiendo, asi que un healthcheck de puerto
+# (`nc -z localhost 3000`) habria dado verde toda la caida. Por eso el test hace
+# una peticion HTTP real hacia afuera.
+#
+# El destino es STATS_URL, que el contenedor ya trae en su entorno
+# (compose.yml: STATS_URL=http${SECURE:+s}://${HOST_ADDRESS}/_stats). Es
+# exactamente la URL que timeouteaba cada 30 segundos en el log del incidente:
+# sale del contenedor, pasa por el nginx del host y vuelve. No hay que agregar
+# ninguna variable ni ningun secreto.
+#
+# Se usa `node` porque los servicios de Huly corren sobre Node y su fetch global
+# ya esta ahi; la imagen no trae curl ni wget. `fetch` solo rechaza ante error de
+# red: cualquier codigo HTTP (incluido un 401) cuenta como exito, que es lo que
+# se quiere medir.
+#
+# LIMITE CONOCIDO: un healthcheck marca el contenedor `unhealthy`, no lo reinicia.
+# Eso alcanza para que se vea: `docker ps` lo muestra y el chequeo #1 de
+# ./chequeo-salud.sh lo reporta como FALLO. Si mas adelante se quiere recuperacion
+# automatica, eso es un servicio aparte tipo autoheal, no una opcion de compose.
+services:
+  account:
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch(process.env.STATS_URL, {signal: AbortSignal.timeout(8000)}).then(() => process.exit(0)).catch(() => process.exit(1))"
+      # 60s entre chequeos: la misma frecuencia con la que el servicio ya habla
+      # con /_stats. 3 fallos seguidos = ~3 minutos hasta marcarlo unhealthy,
+      # suficiente para no reaccionar a un hipo de red.
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      # El arranque de account incluye migraciones; hasta que termine, los
+      # fallos no cuentan.
+      start_period: 90s
