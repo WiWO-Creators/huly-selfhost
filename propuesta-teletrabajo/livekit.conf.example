@@ -1,0 +1,14 @@
+# PROPUESTA — NO APLICADA. Lineas a agregar al final de huly_v7.conf en el
+# servidor. Ese archivo esta en .gitignore a proposito: los secretos no se
+# versionan. Este ejemplo si se versiona, con los valores en blanco.
+#
+# LIVEKIT_HOST lleva el protocolo (README.md:503). Con LiveKit Cloud es wss:// y
+# sale del panel del proyecto, en Settings -> Keys, junto con la key y el secret.
+# El mismo valor lo consumen dos servicios: `love` como LIVEKIT_HOST y `front`
+# como LIVEKIT_WS. Por eso es una sola variable y no dos.
+#
+# Si en el futuro se migra a un LiveKit propio, esto es lo unico que cambia.
+
+LIVEKIT_HOST=wss://PROYECTO.livekit.cloud
+LIVEKIT_API_KEY=
+LIVEKIT_API_SECRET=

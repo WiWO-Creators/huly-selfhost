@@ -1,0 +1,76 @@
+# PROPUESTA — NO APLICADA. Servicio `love` (audio y video del modulo Teletrabajo)
+# y las dos variables que le faltan a `front`.
+#
+# Escrito como override de compose para que se pueda revisar sin tocar nada:
+#
+#     docker compose -f compose.yml -f propuesta-teletrabajo/compose.love.yml config
+#
+# Una vez aprobado, pegar los dos bloques dentro de compose.yml (preferible: el
+# estado real del despliegue queda en un unico archivo versionado) y borrar esta
+# carpeta. Antes de aplicar nada en ops.wiwo.me: ./backup-create.sh
+#
+# Requiere LIVEKIT_HOST, LIVEKIT_API_KEY y LIVEKIT_API_SECRET en huly_v7.conf.
+# Ver livekit.conf.example en esta misma carpeta.
+
+services:
+  love:
+    image: hardcoreeng/love:${HULY_VERSION}
+    depends_on:
+      account:
+        condition: service_started
+      minio:
+        condition: service_healthy
+    environment:
+      - PORT=8096
+      - SECRET=${SECRET}
+      - ACCOUNTS_URL=http://account:3000
+      - STATS_URL=http://stats:4900
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin
+      - STORAGE_PROVIDER_NAME=minio
+      # Van sin "=" a proposito, igual que GOOGLE_CLIENT_ID en el servicio
+      # `account` (compose.yml:184-190). Si faltan en huly_v7.conf quedan
+      # indefinidas dentro del contenedor y el servicio muere al arrancar con
+      # "Missing env variables: LIVEKIT_HOST, ..." (services/love/src/config.ts:80-87).
+      # Pasadas como cadena vacia el servicio arrancaria igual y el fallo recien
+      # aparecerian al entrar a una sala, que es mucho mas dificil de diagnosticar.
+      - LIVEKIT_HOST
+      - LIVEKIT_API_KEY
+      - LIVEKIT_API_SECRET
+    restart: unless-stopped
+    networks:
+      - huly_net
+
+  front:
+    environment:
+      # El navegador se conecta al SFU de LiveKit en forma directa, no a traves
+      # de /_love. Sin esta variable el front sirve LIVEKIT_WS=""
+      # (pods/front/src/__start.ts:41) y, como el guardia de la sala compara
+      # contra undefined y no contra cadena vacia
+      # (plugins/love-resources/src/components/Room.svelte:40-44), la sala se
+      # abre igual y se queda sin conectar, sin mostrar siquiera el cartel
+      # "El servicio no esta configurado".
+      - LIVEKIT_WS=${LIVEKIT_HOST}
+
+# Diferencias respecto de la receta de README.md:462-503, y por que:
+#
+# - Sin `container_name: love`: ningun otro servicio de este compose lo declara.
+#   Los logs se miran con `docker compose logs love`.
+# - Sin `ports: - 8096:8096`: nginx vive en la misma red huly_net y llega a
+#   love:8096 por nombre. Publicar el puerto en el host expone /getToken y
+#   /startRecord sin el reverse proxy adelante, sin ninguna ganancia.
+# - Sin `DB_URL`: el servicio no lo lee. Sus unicas variables son las de
+#   services/love/src/config.ts:37-56 mas STATS_URL y ENABLE_CONSOLE
+#   (services/love/src/main.ts:69,78). Al account llega por ACCOUNTS_URL.
+# - Con `STATS_URL`: lo lee initStatisticsContext
+#   (foundations/server/packages/core/src/stats.ts:94) y lo pasan todos los
+#   demas servicios de este compose.
+# - Con `depends_on`: love pide token al account en cada ingreso a una sala y
+#   escribe las grabaciones en minio.
+#
+# Grabacion de reuniones: no va a funcionar con esta configuracion. El egress de
+# LiveKit Cloud sube el archivo a un destino S3 al que tiene que llegar desde
+# afuera, y aca el storage es minio, que no esta publicado; ademas
+# services/love/src/storage.ts:39-60 solo sabe subir a `s3` o `datalake`, y
+# rechaza el kind `minio`. El boton de grabar queda simplemente no disponible
+# (/checkRecordAvailable devuelve false). Audio, video, pantalla compartida y
+# transcripcion no dependen de esto.
