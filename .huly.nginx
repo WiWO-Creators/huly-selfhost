@@ -6,6 +6,14 @@ map $http_upgrade $connection_upgrade {
     ''      close;
 }
 
+# El bloque que sirve HTML, JS y CSS hablaba HTTP/1.0 con "Connection: close": cada asset abria
+# y cerraba una conexion TCP nueva contra el front. El front ya anuncia keep-alive (5 s, 1000
+# pedidos); este upstream es lo que hace falta para aprovecharlo.
+upstream front_up {
+    server front:8080;
+    keepalive 32;
+}
+
 server {
     listen 80;
     server_name _;
@@ -23,7 +31,12 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_pass http://front:8080;
+
+        # keepalive exige HTTP/1.1 y que no se reenvie la cabecera Connection del cliente.
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+
+        proxy_pass http://front_up;
     }
 
     location /_accounts {
@@ -74,6 +87,21 @@ server {
     #    rewrite ^/_love(/.*)$ $1 break;
     #    proxy_pass http://love:8096/;
     #}
+
+    # Servicio de calendario. HTTP plano, sin WebSocket: no lleva cabeceras
+    # Upgrade/Connection. La ruta /_calendar/push la llama Google sin token de
+    # sesion (se identifica por las cabeceras x-goog-*), asi que no puede haber
+    # ninguna restriccion de acceso delante.
+    location /_calendar {
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_http_version 1.1;
+        rewrite ^/_calendar(/.*)$ $1 break;
+        proxy_pass http://calendar:8095/;
+    }
 
     location /_collaborator {
         proxy_set_header Host $host;
