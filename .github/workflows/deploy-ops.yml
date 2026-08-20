@@ -63,7 +63,11 @@ jobs:
               # realmente aplicado. El `< /dev/null` es obligatorio: los comandos
               # que leen stdin se comen el resto del heredoc del ssh.
               echo "--- contenedores en ejecución:"
-              docker ps --format '{{.Names}}\t{{.Image}}' < /dev/null | grep -E "front|account" || true
+              docker ps --format '{{.Names}}\t{{.Image}}' < /dev/null \
+                | grep -E "front|account|transactor|workspace" || true
+              echo "--- imagenes que resuelve el compose:"
+              docker compose -f compose.yml -f compose.testops.yml config --images < /dev/null \
+                | grep -E "wiwo|transactor|workspace" || true
               echo "--- variables del contenedor account:"
               docker compose -f compose.yml -f compose.testops.yml exec -T account env < /dev/null \
                 | grep -E "HIDE_LOCAL_LOGIN|DISABLE_SIGNUP|ALLOWED_EMAIL_DOMAINS" || true
