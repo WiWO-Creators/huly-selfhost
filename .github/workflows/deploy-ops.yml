@@ -8,7 +8,6 @@ on:
       - 'compose.testops.yml'
       - 'setup.sh'
       - 'nginx.sh'
-      - '.huly.nginx'
   workflow_dispatch:
 
 concurrency:
@@ -37,7 +36,6 @@ jobs:
             --include='compose.testops.yml' \
             --include='setup.sh' \
             --include='nginx.sh' \
-            --include='.huly.nginx' \
             --exclude='*' \
             ./ ${{ secrets.SSH_USER_OPS }}@${{ secrets.SSH_HOST_OPS }}:/root/huly-selfhost/
 
