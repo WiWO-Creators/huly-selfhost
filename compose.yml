@@ -151,6 +151,10 @@ services:
       - STATS_URL=http://stats:4900
       - LAST_NAME_FIRST=${LAST_NAME_FIRST:-true}
       - QUEUE_CONFIG=redpanda:9092
+      # URL interna del servicio de calendario (distinta de la que recibe el
+      # front, que es la publica). Sin ella el disparador que envia los cambios
+      # de evento a Google sale sin hacer nada.
+      - CALENDAR_URL=http://calendar:8095
     restart: unless-stopped
     networks:
       - huly_net
@@ -296,7 +300,37 @@ services:
     restart: unless-stopped
     networks:
       - huly_net
-      
+
+  # Sincronizacion con Google Calendar. Las variables son las que lee
+  # services/calendar/pod-calendar/src/config.ts; la receta del README es de la
+  # epoca de MongoDB y ya no aplica.
+  #
+  # Sin CALENDAR_CREDENTIALS en el .env el servicio aborta al arrancar y entra
+  # en bucle de reinicio. Ver guides/google-calendar.md.
+  #
+  # No se publica el puerto 8095: el acceso entra por nginx en /_calendar, que
+  # es ademas el que atiende las notificaciones push de Google.
+  calendar:
+    image: hardcoreeng/calendar:${HULY_VERSION}
+    depends_on:
+      - account
+      - kvs
+    environment:
+      - PORT=8095
+      - SERVICE_ID=calendar-service
+      - SECRET=${SECRET}
+      - ACCOUNTS_URL=http://account:3000
+      - STATS_URL=http://stats:4900
+      - KVS_URL=http://kvs:8094
+      # La C mayuscula es intencional: asi se llama la variable en el pod.
+      - Credentials=${CALENDAR_CREDENTIALS}
+      - WATCH_URL=http${SECURE:+s}://${HOST_ADDRESS}/_calendar/push
+      - INIT_LIMIT=50
+      - WORKSPACE_INACTIVITY_INTERVAL=3
+    restart: unless-stopped
+    networks:
+      - huly_net
+
 volumes:
   # These named volumes are used when custom volume paths are not specified
   # If VOLUME_*_PATH variables are set, these volumes will be ignored
