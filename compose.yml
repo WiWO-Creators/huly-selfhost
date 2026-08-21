@@ -217,6 +217,16 @@ services:
       - STATS_URL=http://stats:4900
       - QUEUE_CONFIG=redpanda:9092
       - ACCOUNTS_DB_URL=${CR_DB_URL}
+      # Board de Perfex, en solo lectura. Este servicio es el que actualiza cada workspace
+      # tras un despliegue, y ahi corren las migraciones que traen datos del board (por ahora,
+      # las etiquetas). Sin estas variables la migracion se saltea y el resto sigue igual.
+      # Van sin "=" a proposito: si no estan en huly.conf, tampoco se definen en el contenedor.
+      - PERFEX_DB_HOST
+      - PERFEX_DB_PORT
+      - PERFEX_DB_USER
+      - PERFEX_DB_PASSWORD
+      - PERFEX_DB_NAME
+      - PERFEX_TAG_MIN_USES
     # - INIT_REPO_DIR=/no-init-scripts
     restart: unless-stopped
     networks:
