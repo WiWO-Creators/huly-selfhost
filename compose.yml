@@ -232,6 +232,33 @@ services:
     networks:
       - huly_net
 
+  perfex-migration:
+    image: ${PERFEX_MIGRATION_IMAGE:-wiwo/perfex-migration:latest}
+    environment:
+      - PERFEX_MIGRATION_PORT=4080
+      - PERFEX_SYNC_CONFIG=/config/sync.json
+      - PERFEX_MIGRATION_LOG_DIR=/var/lib/perfex-migration
+      - PERFEX_MIGRATION_ALLOWED_EMAILS
+      - ACCOUNTS_URL=http://account:3000
+      - PERFEX_DB_HOST
+      - PERFEX_DB_PORT
+      - PERFEX_DB_USER
+      - PERFEX_DB_PASSWORD
+      - PERFEX_DB_NAME
+      - PERFEX_DB_PREFIX
+      - DIR_ADJUNTOS=/attachments
+      - HULY_TOKEN_WIWO
+      - HULY_TOKEN_PALTA
+      - HULY_TOKEN_MGC
+      - HULY_TOKEN_SIN_CLASIFICAR
+    volumes:
+      - ${PERFEX_MIGRATION_CONFIG_DIR:-./perfex-migration}:/config:ro
+      - ${PERFEX_ATTACHMENTS_PATH:-./perfex-attachments}:/attachments:ro
+      - ${VOLUME_PERFEX_MIGRATION_LOGS:-perfex_migration_logs}:/var/lib/perfex-migration
+    restart: unless-stopped
+    networks:
+      - huly_net
+
   front:
     image: ${FRONT_IMAGE:-hardcoreeng/front:${HULY_VERSION}}
     environment:
@@ -320,6 +347,7 @@ volumes:
   cr_certs:
   redpanda:
   mongodb:
+  perfex_migration_logs:
 
 networks:
   huly_net:
